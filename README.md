@@ -44,7 +44,7 @@ All endpoint management routes require the `X-API-KEY` header.
 #### List Endpoints
 
 ```bash
-curl localhost:8080/endpoints \
+curl 'localhost:8080/endpoints' \
   -H 'X-API-KEY: my-secret-key'
 ```
 
@@ -62,7 +62,7 @@ Response: `200 OK`
 #### Register Endpoint
 
 ```bash
-curl -X POST localhost:8080/endpoints \
+curl -X POST 'localhost:8080/endpoints' \
   -H 'Content-Type: application/json' \
   -H 'X-API-KEY: my-secret-key' \
   -d '{"url": "https://myapp.com/payment-hook"}'
@@ -82,7 +82,7 @@ Returns `409 Conflict` if the URL is already registered.
 #### Delete Endpoint
 
 ```bash
-curl -X DELETE localhost:8080/endpoints/1 \
+curl -X DELETE 'localhost:8080/endpoints/1' \
   -H 'X-API-KEY: my-secret-key'
 ```
 
@@ -123,7 +123,7 @@ Response: `200 OK`
 The webhook endpoint does not require authentication. It receives the payload and forwards it to all registered endpoints asynchronously.
 
 ```bash
-curl -X POST localhost:8080/webhook \
+curl -X POST 'localhost:8080/webhook' \
   -H 'Content-Type: application/json' \
   -H 'X-Phoenix-Signature: <signature>' \
   -d '{
