@@ -2,21 +2,7 @@
 
 A simple webhook proxy service that receives [phoenixd](https://phoenix.acinq.co/server) payment webhook requests and forwards them to multiple registered target endpoints.
 
-## Prerequisites
-
-- Go 1.25+
-- GCC (required by go-sqlite3)
-
-## Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ENVIRONMENT` | No | - | Set to `production` to enable release mode and use `/app/data/proxy.db` as the database path |
-| `API_KEY` | Yes | - | API key for authenticating endpoint management requests |
-| `ADDRESS` | No | - | Server bind address (e.g. `127.0.0.1`, `0.0.0.0`) |
-| `PORT` | No | `8080` | Server listening port |
-
-## Docker installation
+## Installation
 
 ```sh
 docker run --name phoenixd-proxy \
@@ -29,11 +15,14 @@ docker run --name phoenixd-proxy \
   ghcr.io/dnjooiopa/phoenixd-proxy:latest
 ```
 
-## Running
+## Environment Variables
 
-```bash
-API_KEY=my-secret-key go run .
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ENVIRONMENT` | No | - | Set to `production` to enable release mode and use `/app/data/proxy.db` as the database path |
+| `API_KEY` | Yes | - | API key for authenticating endpoint management requests |
+| `ADDRESS` | No | - | Server bind address (e.g. `127.0.0.1`, `0.0.0.0`) |
+| `PORT` | No | `8080` | Server listening port |
 
 ## API Reference
 
