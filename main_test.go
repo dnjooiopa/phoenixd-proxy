@@ -50,10 +50,12 @@ func TestListEndpointsEmpty(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var endpoints []Endpoint
-	json.Unmarshal(w.Body.Bytes(), &endpoints)
-	if len(endpoints) != 0 {
-		t.Errorf("expected 0 endpoints, got %d", len(endpoints))
+	var resp struct {
+		Data []Endpoint `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Data) != 0 {
+		t.Errorf("expected 0 endpoints, got %d", len(resp.Data))
 	}
 }
 
@@ -72,10 +74,12 @@ func TestCreateAndListEndpoint(t *testing.T) {
 		t.Errorf("expected 201, got %d", w.Code)
 	}
 
-	var ep Endpoint
-	json.Unmarshal(w.Body.Bytes(), &ep)
-	if ep.URL != "https://example.com/hook" {
-		t.Errorf("unexpected URL: %s", ep.URL)
+	var createResp struct {
+		Data Endpoint `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &createResp)
+	if createResp.Data.URL != "https://example.com/hook" {
+		t.Errorf("unexpected URL: %s", createResp.Data.URL)
 	}
 
 	// List
@@ -84,10 +88,12 @@ func TestCreateAndListEndpoint(t *testing.T) {
 	req.Header.Set("X-API-KEY", testAPIKey)
 	r.ServeHTTP(w, req)
 
-	var endpoints []Endpoint
-	json.Unmarshal(w.Body.Bytes(), &endpoints)
-	if len(endpoints) != 1 {
-		t.Errorf("expected 1 endpoint, got %d", len(endpoints))
+	var listResp struct {
+		Data []Endpoint `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &listResp)
+	if len(listResp.Data) != 1 {
+		t.Errorf("expected 1 endpoint, got %d", len(listResp.Data))
 	}
 }
 
@@ -121,9 +127,6 @@ func TestDeleteEndpoint(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-KEY", testAPIKey)
 	r.ServeHTTP(w, req)
-
-	var ep Endpoint
-	json.Unmarshal(w.Body.Bytes(), &ep)
 
 	// Delete
 	w = httptest.NewRecorder()
@@ -206,10 +209,12 @@ func TestListWebhookRequestsEmpty(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var requests []WebhookRequest
-	json.Unmarshal(w.Body.Bytes(), &requests)
-	if len(requests) != 0 {
-		t.Errorf("expected 0 requests, got %d", len(requests))
+	var resp struct {
+		Data []WebhookRequest `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Data) != 0 {
+		t.Errorf("expected 0 requests, got %d", len(resp.Data))
 	}
 }
 
@@ -228,9 +233,13 @@ func TestWebhookNoAuth(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["status"] != "ok" {
-		t.Errorf("expected status 'ok', got '%v'", resp["status"])
+	var webhookResp struct {
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &webhookResp)
+	if webhookResp.Data.Status != "ok" {
+		t.Errorf("expected status 'ok', got '%v'", webhookResp.Data.Status)
 	}
 }

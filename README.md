@@ -39,13 +39,15 @@ curl 'localhost:8080/endpoints' \
 
 Response: `200 OK`
 ```json
-[
-  {
-    "id": 1,
-    "url": "https://myapp.com/payment-hook",
-    "created_at": "2026-03-15 10:00:00"
-  }
-]
+{
+  "data": [
+    {
+      "id": 1,
+      "url": "https://myapp.com/payment-hook",
+      "created_at": "2026-03-15 10:00:00"
+    }
+  ]
+}
 ```
 
 #### Register Endpoint
@@ -60,9 +62,11 @@ curl -X POST 'localhost:8080/endpoints' \
 Response: `201 Created`
 ```json
 {
-  "id": 1,
-  "url": "https://myapp.com/payment-hook",
-  "created_at": "2026-03-15 10:00:00"
+  "data": {
+    "id": 1,
+    "url": "https://myapp.com/payment-hook",
+    "created_at": "2026-03-15 10:00:00"
+  }
 }
 ```
 
@@ -92,15 +96,17 @@ curl 'localhost:8080/webhook-requests?limit=10' \
 
 Response: `200 OK`
 ```json
-[
-  {
-    "id": 1,
-    "body": "{\"type\":\"payment_received\",\"amountSat\":1}",
-    "content_type": "application/json",
-    "signature": "<signature>",
-    "created_at": "2026-03-15 10:00:00"
-  }
-]
+{
+  "data": [
+    {
+      "id": 1,
+      "body": "{\"type\":\"payment_received\",\"amountSat\":1}",
+      "content_type": "application/json",
+      "signature": "<signature>",
+      "created_at": "2026-03-15 10:00:00"
+    }
+  ]
+}
 ```
 
 | Query Param | Default | Description |
@@ -129,8 +135,10 @@ curl -X POST 'localhost:8080/webhook' \
 Response: `200 OK`
 ```json
 {
-  "status": "ok",
-  "forwarded_to": 2
+  "data": {
+    "status": "ok",
+    "forwarded_to": 2
+  }
 }
 ```
 

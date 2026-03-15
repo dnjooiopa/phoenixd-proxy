@@ -57,7 +57,7 @@ func handleListEndpoints(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, endpoints)
+	c.JSON(http.StatusOK, gin.H{"data": endpoints})
 }
 
 func handleCreateEndpoint(c *gin.Context) {
@@ -85,7 +85,7 @@ func handleCreateEndpoint(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, ep)
+	c.JSON(http.StatusCreated, gin.H{"data": ep})
 }
 
 func handleDeleteEndpoint(c *gin.Context) {
@@ -120,7 +120,7 @@ func handleListWebhookRequests(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, requests)
+	c.JSON(http.StatusOK, gin.H{"data": requests})
 }
 
 func handleWebhook(c *gin.Context) {
@@ -152,10 +152,10 @@ func handleWebhook(c *gin.Context) {
 		go ForwardToAll(endpoints, body, headers)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
 		"status":       "ok",
 		"forwarded_to": len(endpoints),
-	})
+	}})
 }
 
 func main() {
