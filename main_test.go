@@ -149,6 +149,70 @@ func TestDeleteEndpointNotFound(t *testing.T) {
 	}
 }
 
+func TestWebhookSavesRequest(t *testing.T) {
+	r := setupTestRouter(t)
+
+	body := bytes.NewBufferString(`{"type":"payment_received","amountSat":100}`)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/webhook", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Phoenix-Signature", "sig456")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	// Verify it was saved
+	requests, err := GetAllWebhookRequests(db, 100)
+	if err != nil {
+		t.Fatalf("GetAllWebhookRequests failed: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 saved request, got %d", len(requests))
+	}
+	if requests[0].Body != `{"type":"payment_received","amountSat":100}` {
+		t.Errorf("unexpected body: %s", requests[0].Body)
+	}
+	if requests[0].ContentType != "application/json" {
+		t.Errorf("unexpected content_type: %s", requests[0].ContentType)
+	}
+	if requests[0].Signature != "sig456" {
+		t.Errorf("unexpected signature: %s", requests[0].Signature)
+	}
+}
+
+func TestListWebhookRequestsUnauthorized(t *testing.T) {
+	r := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/webhook-requests", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestListWebhookRequestsEmpty(t *testing.T) {
+	r := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/webhook-requests", nil)
+	req.Header.Set("X-API-KEY", testAPIKey)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var requests []WebhookRequest
+	json.Unmarshal(w.Body.Bytes(), &requests)
+	if len(requests) != 0 {
+		t.Errorf("expected 0 requests, got %d", len(requests))
+	}
+}
+
 func TestWebhookNoAuth(t *testing.T) {
 	r := setupTestRouter(t)
 

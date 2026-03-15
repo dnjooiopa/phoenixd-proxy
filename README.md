@@ -90,6 +90,34 @@ Response: `204 No Content`
 
 Returns `404 Not Found` if the endpoint ID does not exist.
 
+### Webhook Requests
+
+Requires the `X-API-KEY` header.
+
+#### List Webhook Requests
+
+```bash
+curl 'localhost:8080/webhook-requests?limit=10' \
+  -H 'X-API-KEY: my-secret-key'
+```
+
+Response: `200 OK`
+```json
+[
+  {
+    "id": 1,
+    "body": "{\"type\":\"payment_received\",\"amountSat\":1}",
+    "content_type": "application/json",
+    "signature": "<signature>",
+    "created_at": "2026-03-15 10:00:00"
+  }
+]
+```
+
+| Query Param | Default | Description |
+|-------------|---------|-------------|
+| `limit`     | `100`   | Number of records to return (max `100`) |
+
 ### Webhook Receiver
 
 The webhook endpoint does not require authentication. It receives the payload and forwards it to all registered endpoints asynchronously.
@@ -117,7 +145,7 @@ Response: `200 OK`
 }
 ```
 
-The `Content-Type` and `X-Phoenix-Signature` headers are forwarded to all registered endpoints.
+The `Content-Type` and `X-Phoenix-Signature` headers are forwarded to all registered endpoints. Each incoming webhook request is also saved to the database and can be retrieved via the [Webhook Requests](#webhook-requests) API.
 
 ## Testing
 

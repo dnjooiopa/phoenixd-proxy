@@ -38,6 +38,13 @@ func setupRouter(apiKey string) *gin.Engine {
 		ep.DELETE("/:id", handleDeleteEndpoint)
 	}
 
+	// Webhook requests (protected)
+	wr := r.Group("/webhook-requests")
+	wr.Use(authRequired(apiKey))
+	{
+		wr.GET("", handleListWebhookRequests)
+	}
+
 	// Webhook receiver (no auth)
 	r.POST("/webhook", handleWebhook)
 
@@ -100,6 +107,22 @@ func handleDeleteEndpoint(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func handleListWebhookRequests(c *gin.Context) {
+	limit := 100
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+
+	requests, err := GetAllWebhookRequests(db, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, requests)
+}
+
 func handleWebhook(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -107,9 +130,16 @@ func handleWebhook(c *gin.Context) {
 		return
 	}
 
+	contentType := c.GetHeader("Content-Type")
+	signature := c.GetHeader("X-Phoenix-Signature")
+
 	headers := map[string]string{
-		"Content-Type":        c.GetHeader("Content-Type"),
-		"X-Phoenix-Signature": c.GetHeader("X-Phoenix-Signature"),
+		"Content-Type":        contentType,
+		"X-Phoenix-Signature": signature,
+	}
+
+	if _, err := CreateWebhookRequest(db, string(body), contentType, signature); err != nil {
+		log.Printf("failed to save webhook request: %v", err)
 	}
 
 	endpoints, err := GetAllEndpoints(db)

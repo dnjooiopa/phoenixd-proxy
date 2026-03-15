@@ -142,6 +142,60 @@ func TestSoftDeleteAllowsReuse(t *testing.T) {
 	}
 }
 
+func TestCreateWebhookRequest(t *testing.T) {
+	setupTestDB(t)
+
+	wr, err := CreateWebhookRequest(db, `{"type":"payment"}`, "application/json", "sig123")
+	if err != nil {
+		t.Fatalf("CreateWebhookRequest failed: %v", err)
+	}
+	if wr.ID == 0 {
+		t.Error("expected non-zero ID")
+	}
+	if wr.Body != `{"type":"payment"}` {
+		t.Errorf("unexpected body: %s", wr.Body)
+	}
+	if wr.ContentType != "application/json" {
+		t.Errorf("unexpected content_type: %s", wr.ContentType)
+	}
+	if wr.Signature != "sig123" {
+		t.Errorf("unexpected signature: %s", wr.Signature)
+	}
+	if wr.CreatedAt.IsZero() {
+		t.Error("expected non-empty CreatedAt")
+	}
+}
+
+func TestGetAllWebhookRequests(t *testing.T) {
+	setupTestDB(t)
+
+	// Empty initially
+	requests, err := GetAllWebhookRequests(db, 100)
+	if err != nil {
+		t.Fatalf("GetAllWebhookRequests failed: %v", err)
+	}
+	if len(requests) != 0 {
+		t.Errorf("expected 0 requests, got %d", len(requests))
+	}
+
+	// Add two
+	CreateWebhookRequest(db, "body1", "text/plain", "sig1")
+	CreateWebhookRequest(db, "body2", "text/plain", "sig2")
+
+	requests, err = GetAllWebhookRequests(db, 100)
+	if err != nil {
+		t.Fatalf("GetAllWebhookRequests failed: %v", err)
+	}
+	if len(requests) != 2 {
+		t.Errorf("expected 2 requests, got %d", len(requests))
+	}
+
+	// Should be ordered by id DESC (newest first)
+	if requests[0].Body != "body2" {
+		t.Errorf("expected newest first, got %s", requests[0].Body)
+	}
+}
+
 func TestDeleteAlreadyDeletedEndpoint(t *testing.T) {
 	setupTestDB(t)
 

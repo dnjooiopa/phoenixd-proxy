@@ -15,6 +15,14 @@ type Endpoint struct {
 	DeletedAt *time.Time `json:"deleted_at"`
 }
 
+type WebhookRequest struct {
+	ID          int64     `json:"id"`
+	Body        string    `json:"body"`
+	ContentType string    `json:"content_type"`
+	Signature   string    `json:"signature"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 var ErrNotFound = errors.New("not found")
 
 func InitDB(path string) (*sql.DB, error) {
@@ -30,6 +38,19 @@ func InitDB(path string) (*sql.DB, error) {
 			url        TEXT NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			deleted_at TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = database.Exec(`
+		CREATE TABLE IF NOT EXISTS webhook_requests (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			body         TEXT NOT NULL,
+			content_type TEXT NOT NULL DEFAULT '',
+			signature    TEXT NOT NULL DEFAULT '',
+			created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -80,6 +101,44 @@ func CreateEndpoint(database *sql.DB, url string) (Endpoint, error) {
 		return Endpoint{}, err
 	}
 	return ep, nil
+}
+
+func CreateWebhookRequest(database *sql.DB, body, contentType, signature string) (WebhookRequest, error) {
+	var wr WebhookRequest
+	err := database.QueryRow(
+		"INSERT INTO webhook_requests (body, content_type, signature) VALUES (?, ?, ?) RETURNING id, body, content_type, signature, created_at",
+		body, contentType, signature,
+	).Scan(&wr.ID, &wr.Body, &wr.ContentType, &wr.Signature, &wr.CreatedAt)
+	if err != nil {
+		return WebhookRequest{}, err
+	}
+	return wr, nil
+}
+
+func GetAllWebhookRequests(database *sql.DB, limit int) ([]WebhookRequest, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := database.Query("SELECT id, body, content_type, signature, created_at FROM webhook_requests ORDER BY id DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var requests []WebhookRequest
+	for rows.Next() {
+		var wr WebhookRequest
+		if err := rows.Scan(&wr.ID, &wr.Body, &wr.ContentType, &wr.Signature, &wr.CreatedAt); err != nil {
+			return nil, err
+		}
+		requests = append(requests, wr)
+	}
+
+	if requests == nil {
+		requests = []WebhookRequest{}
+	}
+
+	return requests, rows.Err()
 }
 
 func DeleteEndpoint(database *sql.DB, id int64) error {
