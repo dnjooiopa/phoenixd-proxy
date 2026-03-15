@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -128,6 +129,8 @@ func handleWebhook(c *gin.Context) {
 }
 
 func main() {
+	time.Local = time.UTC
+
 	apiKey := os.Getenv("API_KEY")
 	if apiKey == "" {
 		log.Fatal("API_KEY environment variable is required")

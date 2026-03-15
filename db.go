@@ -3,14 +3,16 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type Endpoint struct {
-	ID        int64  `json:"id"`
-	URL       string `json:"url"`
-	CreatedAt string `json:"created_at"`
+	ID        int64      `json:"id"`
+	URL       string     `json:"url"`
+	CreatedAt time.Time  `json:"created_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
 }
 
 var ErrNotFound = errors.New("not found")
@@ -25,9 +27,18 @@ func InitDB(path string) (*sql.DB, error) {
 	_, err = database.Exec(`
 		CREATE TABLE IF NOT EXISTS endpoints (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			url        TEXT NOT NULL UNIQUE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			url        TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP
 		)
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = database.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_endpoints_url_active
+		ON endpoints (url) WHERE deleted_at IS NULL
 	`)
 	if err != nil {
 		return nil, err
@@ -37,7 +48,7 @@ func InitDB(path string) (*sql.DB, error) {
 }
 
 func GetAllEndpoints(database *sql.DB) ([]Endpoint, error) {
-	rows, err := database.Query("SELECT id, url, created_at FROM endpoints ORDER BY id")
+	rows, err := database.Query("SELECT id, url, created_at FROM endpoints WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +83,10 @@ func CreateEndpoint(database *sql.DB, url string) (Endpoint, error) {
 }
 
 func DeleteEndpoint(database *sql.DB, id int64) error {
-	result, err := database.Exec("DELETE FROM endpoints WHERE id = ?", id)
+	result, err := database.Exec(
+		"UPDATE endpoints SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
+		id,
+	)
 	if err != nil {
 		return err
 	}

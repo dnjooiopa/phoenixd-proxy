@@ -37,7 +37,7 @@ func TestCreateEndpoint(t *testing.T) {
 	if ep.URL != "https://example.com/hook" {
 		t.Errorf("expected URL 'https://example.com/hook', got '%s'", ep.URL)
 	}
-	if ep.CreatedAt == "" {
+	if ep.CreatedAt.IsZero() {
 		t.Error("expected non-empty CreatedAt")
 	}
 }
@@ -103,5 +103,54 @@ func TestDeleteEndpointNotFoundDB(t *testing.T) {
 	err := DeleteEndpoint(db, 9999)
 	if err == nil {
 		t.Fatal("expected error for non-existent ID, got nil")
+	}
+}
+
+func TestSoftDeleteKeepsRecord(t *testing.T) {
+	setupTestDB(t)
+
+	ep, _ := CreateEndpoint(db, "https://example.com/hook")
+	DeleteEndpoint(db, ep.ID)
+
+	// Record should still exist in DB
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM endpoints WHERE id = ?", ep.ID).Scan(&count)
+	if count != 1 {
+		t.Errorf("expected soft-deleted record to still exist, got count %d", count)
+	}
+
+	// But not returned by GetAllEndpoints
+	endpoints, _ := GetAllEndpoints(db)
+	if len(endpoints) != 0 {
+		t.Errorf("expected 0 active endpoints, got %d", len(endpoints))
+	}
+}
+
+func TestSoftDeleteAllowsReuse(t *testing.T) {
+	setupTestDB(t)
+
+	ep, _ := CreateEndpoint(db, "https://example.com/hook")
+	DeleteEndpoint(db, ep.ID)
+
+	// Should be able to re-create with the same URL
+	ep2, err := CreateEndpoint(db, "https://example.com/hook")
+	if err != nil {
+		t.Fatalf("expected re-create after soft delete to succeed: %v", err)
+	}
+	if ep2.URL != "https://example.com/hook" {
+		t.Errorf("unexpected URL: %s", ep2.URL)
+	}
+}
+
+func TestDeleteAlreadyDeletedEndpoint(t *testing.T) {
+	setupTestDB(t)
+
+	ep, _ := CreateEndpoint(db, "https://example.com/hook")
+	DeleteEndpoint(db, ep.ID)
+
+	// Deleting again should return not found
+	err := DeleteEndpoint(db, ep.ID)
+	if err != ErrNotFound {
+		t.Errorf("expected ErrNotFound for already-deleted endpoint, got %v", err)
 	}
 }
