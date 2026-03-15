@@ -7,20 +7,27 @@ A simple webhook proxy service that receives [phoenixd](https://phoenix.acinq.co
 - Go 1.25+
 - GCC (required by go-sqlite3)
 
-## Setup
-
-```bash
-go mod download
-```
-
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `ENVIRONMENT` | No | - | Set to `production` to enable release mode and use `/app/data/proxy.db` as the database path |
 | `API_KEY` | Yes | - | API key for authenticating endpoint management requests |
 | `ADDRESS` | No | - | Server bind address (e.g. `127.0.0.1`, `0.0.0.0`) |
 | `PORT` | No | `8080` | Server listening port |
-| `ENVIRONMENT` | No | - | Set to `production` to enable release mode and use `/app/data/proxy.db` as the database path |
+
+## Docker installation
+
+```sh
+docker run --name phoenixd-proxy \
+  -dp 9780:8080 \
+  -v /path/to/data/:/app/data/ \
+  -e ENVIRONMENT=production \
+  -e API_KEY=my-secret-key \
+  --network lnf \
+  --restart unless-stopped \
+  ghcr.io/dnjooiopa/phoenixd-proxy:latest
+```
 
 ## Running
 
