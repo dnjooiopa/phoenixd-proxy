@@ -43,10 +43,10 @@ func setupRouter(apiKey, phoenixdURL, phoenixdPassword string) *gin.Engine {
 	}
 
 	// Phoenixd proxy (protected)
-	phoenixd := r.Group("")
+	phoenixd := r.Group("/phoenixd/proxy")
 	phoenixd.Use(authRequired(apiKey))
 	{
-		phoenixd.POST("/createinvoice", handleCreateInvoice(phoenixdURL, phoenixdPassword))
+		phoenixd.Any("/*path", handlePhoenixdProxy(phoenixdURL, phoenixdPassword))
 	}
 
 	// Webhook receiver (no auth)

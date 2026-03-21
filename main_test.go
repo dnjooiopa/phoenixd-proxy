@@ -249,11 +249,11 @@ func TestWebhookNoAuth(t *testing.T) {
 	}
 }
 
-func TestCreateInvoiceUnauthorized(t *testing.T) {
+func TestPhoenixdProxyUnauthorized(t *testing.T) {
 	r := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/createinvoice", strings.NewReader("description=test"))
+	req, _ := http.NewRequest("POST", "/phoenixd/proxy/createinvoice", strings.NewReader("description=test"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ServeHTTP(w, req)
 
@@ -262,39 +262,26 @@ func TestCreateInvoiceUnauthorized(t *testing.T) {
 	}
 }
 
-func TestCreateInvoiceMissingDescription(t *testing.T) {
-	r := setupTestRouter(t)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/createinvoice", strings.NewReader("amountSat=100"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-API-KEY", testAPIKey)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestCreateInvoiceProxiesToPhoenixd(t *testing.T) {
-	// Mock phoenixd server
+func TestPhoenixdProxyPostCreateInvoice(t *testing.T) {
 	phoenixd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify Basic Auth
+		if r.URL.Path != "/createinvoice" {
+			t.Errorf("expected path '/createinvoice', got '%s'", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+
 		_, password, ok := r.BasicAuth()
 		if !ok || password != "test-phoenixd-pass" {
 			t.Errorf("expected basic auth with password 'test-phoenixd-pass'")
 		}
 
-		// Verify form data
 		r.ParseForm()
 		if r.PostForm.Get("description") != "my first invoice" {
 			t.Errorf("expected description 'my first invoice', got '%s'", r.PostForm.Get("description"))
 		}
 		if r.PostForm.Get("amountSat") != "100" {
 			t.Errorf("expected amountSat '100', got '%s'", r.PostForm.Get("amountSat"))
-		}
-		if r.PostForm.Get("externalId") != "foobar" {
-			t.Errorf("expected externalId 'foobar', got '%s'", r.PostForm.Get("externalId"))
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -307,7 +294,7 @@ func TestCreateInvoiceProxiesToPhoenixd(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	body := "description=my+first+invoice&amountSat=100&externalId=foobar"
-	req, _ := http.NewRequest("POST", "/createinvoice", strings.NewReader(body))
+	req, _ := http.NewRequest("POST", "/phoenixd/proxy/createinvoice", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-API-KEY", testAPIKey)
 	r.ServeHTTP(w, req)
@@ -326,8 +313,40 @@ func TestCreateInvoiceProxiesToPhoenixd(t *testing.T) {
 	}
 }
 
-func TestCreateInvoicePhoenixdError(t *testing.T) {
-	// Mock phoenixd server that returns an error
+func TestPhoenixdProxyGetNodeInfo(t *testing.T) {
+	phoenixd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/getinfo" {
+			t.Errorf("expected path '/getinfo', got '%s'", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"nodeId":"02abc","channels":[]}`))
+	}))
+	defer phoenixd.Close()
+
+	r := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-pass")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/phoenixd/proxy/getinfo", nil)
+	req.Header.Set("X-API-KEY", testAPIKey)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["nodeId"] != "02abc" {
+		t.Errorf("expected nodeId '02abc', got %v", resp["nodeId"])
+	}
+}
+
+func TestPhoenixdProxyPhoenixdError(t *testing.T) {
 	phoenixd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -339,41 +358,12 @@ func TestCreateInvoicePhoenixdError(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	body := "description=test&amountSat=-1"
-	req, _ := http.NewRequest("POST", "/createinvoice", strings.NewReader(body))
+	req, _ := http.NewRequest("POST", "/phoenixd/proxy/createinvoice", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-API-KEY", testAPIKey)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestCreateInvoiceWithDescriptionHash(t *testing.T) {
-	phoenixd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
-		if r.PostForm.Get("descriptionHash") != "abc123hash" {
-			t.Errorf("expected descriptionHash 'abc123hash', got '%s'", r.PostForm.Get("descriptionHash"))
-		}
-		if r.PostForm.Get("description") != "" {
-			t.Errorf("expected no description, got '%s'", r.PostForm.Get("description"))
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"amountSat":0,"paymentHash":"def456","serialized":"lntb..."}`))
-	}))
-	defer phoenixd.Close()
-
-	r := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-pass")
-
-	w := httptest.NewRecorder()
-	body := "descriptionHash=abc123hash"
-	req, _ := http.NewRequest("POST", "/createinvoice", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-API-KEY", testAPIKey)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
 	}
 }

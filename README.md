@@ -119,40 +119,39 @@ Response: `200 OK`
 
 ### Phoenixd Proxy
 
-Proxied routes require the `X-API-KEY` header. Requests are forwarded to the configured `PHOENIXD_URL` with HTTP Basic Auth.
+All requests to `/phoenixd/proxy/*` are forwarded to the configured `PHOENIXD_URL` with HTTP Basic Auth. Any HTTP method is supported. Requires the `X-API-KEY` header.
 
-#### Create Bolt11 Invoice
+```
+{METHOD} /phoenixd/proxy/{phoenixd-path}
+```
 
-Creates a Bolt11 invoice. A Bolt11 invoice is a non-reusable, expirable payment request for Lightning.
+#### Examples
+
+Create a Bolt11 invoice:
 
 ```bash
-curl -X POST 'localhost:8080/createinvoice' \
+curl -X POST 'localhost:8080/phoenixd/proxy/createinvoice' \
   -H 'X-API-KEY: my-secret-key' \
   -d description='my first invoice' \
   -d amountSat=100 \
-  -d externalId=foobar \
-  -d webhookUrl='https://my.webhook.net'
+  -d externalId=foobar
 ```
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `description` | Yes* | Description of the invoice (max 128 characters) |
-| `descriptionHash` | Yes* | SHA256 hash of a description (alternative to `description`) |
-| `amountSat` | No | Amount requested in satoshi. If not set, the invoice can be paid with any amount |
-| `expirySeconds` | No | Invoice expiry in seconds (default `3600`) |
-| `externalId` | No | Custom identifier to link the invoice to an external system |
-| `webhookUrl` | No | Webhook URL to be notified when this payment is received |
+Get node info:
 
-\* Either `description` or `descriptionHash` is required.
-
-Response: `200 OK`
-```json
-{
-  "amountSat": 100,
-  "paymentHash": "f419207c9edde9021ebfb6bd0df6bd0a6606ecaf935357cc2f362e30835c3765",
-  "serialized": "lntb1u1pjlsjnq..."
-}
+```bash
+curl 'localhost:8080/phoenixd/proxy/getinfo' \
+  -H 'X-API-KEY: my-secret-key'
 ```
+
+List incoming payments:
+
+```bash
+curl 'localhost:8080/phoenixd/proxy/payments/incoming?externalId=foobar' \
+  -H 'X-API-KEY: my-secret-key'
+```
+
+Responses are returned as-is from phoenixd (status code, content type, and body).
 
 ### Webhook Receiver
 
