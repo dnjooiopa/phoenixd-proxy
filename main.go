@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -10,7 +9,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var db *sql.DB
+const dbKey = "db"
+
+func getDB(c *gin.Context) *DB {
+	return c.MustGet(dbKey).(*DB)
+}
+
+func dbMiddleware(db *DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set(dbKey, db)
+		c.Next()
+	}
+}
 
 func authRequired(apiKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -23,8 +33,9 @@ func authRequired(apiKey string) gin.HandlerFunc {
 	}
 }
 
-func setupRouter(apiKey, phoenixdURL, phoenixdPassword string) *gin.Engine {
+func setupRouter(db *DB, apiKey, phoenixdURL, phoenixdPassword string) *gin.Engine {
 	r := gin.Default()
+	r.Use(dbMiddleware(db))
 
 	// Endpoint management (protected)
 	ep := r.Group("/endpoints")
@@ -83,8 +94,7 @@ func main() {
 		dbPath = "/app/data/proxy.db"
 	}
 
-	var err error
-	db, err = InitDB(dbPath)
+	db, err := NewDB(dbPath)
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
@@ -96,7 +106,7 @@ func main() {
 		port = "8080"
 	}
 
-	r := setupRouter(apiKey, phoenixdURL, phoenixdPassword)
+	r := setupRouter(db, apiKey, phoenixdURL, phoenixdPassword)
 	log.Printf("starting server on :%s", port)
 	if err := r.Run(addr + ":" + port); err != nil {
 		log.Fatalf("failed to start server: %v", err)

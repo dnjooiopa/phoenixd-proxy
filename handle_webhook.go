@@ -10,6 +10,7 @@ import (
 )
 
 func handleListWebhookRequests(c *gin.Context) {
+	db := getDB(c)
 	limit := 100
 	if l := c.Query("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil {
@@ -17,7 +18,7 @@ func handleListWebhookRequests(c *gin.Context) {
 		}
 	}
 
-	requests, err := GetAllWebhookRequests(db, limit)
+	requests, err := db.GetAllWebhookRequests(limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -40,11 +41,13 @@ func handleWebhook(c *gin.Context) {
 		"X-Phoenix-Signature": signature,
 	}
 
-	if _, err := CreateWebhookRequest(db, string(body), contentType, signature); err != nil {
+	db := getDB(c)
+
+	if _, err := db.CreateWebhookRequest(string(body), contentType, signature); err != nil {
 		log.Printf("failed to save webhook request: %v", err)
 	}
 
-	endpoints, err := GetAllEndpoints(db)
+	endpoints, err := db.GetAllEndpoints()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

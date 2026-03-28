@@ -4,30 +4,30 @@ import (
 	"testing"
 )
 
-func setupTestDB(t *testing.T) {
+func setupTestDB(t *testing.T) *DB {
 	t.Helper()
-	var err error
-	db, err = InitDB(":memory:")
+	db, err := NewDB(":memory:")
 	if err != nil {
-		t.Fatalf("InitDB failed: %v", err)
+		t.Fatalf("NewDB failed: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
+	return db
 }
 
 func TestInitDB(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
 	// Verify table exists by inserting a row
-	_, err := db.Exec("INSERT INTO endpoints (url) VALUES (?)", "https://example.com")
+	_, err := db.conn.Exec("INSERT INTO endpoints (url) VALUES (?)", "https://example.com")
 	if err != nil {
 		t.Fatalf("expected endpoints table to exist: %v", err)
 	}
 }
 
 func TestCreateEndpoint(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	ep, err := CreateEndpoint(db, "https://example.com/hook")
+	ep, err := db.CreateEndpoint("https://example.com/hook")
 	if err != nil {
 		t.Fatalf("CreateEndpoint failed: %v", err)
 	}
@@ -43,24 +43,24 @@ func TestCreateEndpoint(t *testing.T) {
 }
 
 func TestCreateEndpointDuplicateDB(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	_, err := CreateEndpoint(db, "https://example.com/hook")
+	_, err := db.CreateEndpoint("https://example.com/hook")
 	if err != nil {
 		t.Fatalf("first CreateEndpoint failed: %v", err)
 	}
 
-	_, err = CreateEndpoint(db, "https://example.com/hook")
+	_, err = db.CreateEndpoint("https://example.com/hook")
 	if err == nil {
 		t.Fatal("expected error for duplicate URL, got nil")
 	}
 }
 
 func TestGetAllEndpoints(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
 	// Empty initially
-	endpoints, err := GetAllEndpoints(db)
+	endpoints, err := db.GetAllEndpoints()
 	if err != nil {
 		t.Fatalf("GetAllEndpoints failed: %v", err)
 	}
@@ -69,10 +69,10 @@ func TestGetAllEndpoints(t *testing.T) {
 	}
 
 	// Add two
-	CreateEndpoint(db, "https://a.com")
-	CreateEndpoint(db, "https://b.com")
+	db.CreateEndpoint("https://a.com")
+	db.CreateEndpoint("https://b.com")
 
-	endpoints, err = GetAllEndpoints(db)
+	endpoints, err = db.GetAllEndpoints()
 	if err != nil {
 		t.Fatalf("GetAllEndpoints failed: %v", err)
 	}
@@ -82,58 +82,58 @@ func TestGetAllEndpoints(t *testing.T) {
 }
 
 func TestDeleteEndpointDB(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	ep, _ := CreateEndpoint(db, "https://example.com/hook")
+	ep, _ := db.CreateEndpoint("https://example.com/hook")
 
-	err := DeleteEndpoint(db, ep.ID)
+	err := db.DeleteEndpoint(ep.ID)
 	if err != nil {
 		t.Fatalf("DeleteEndpoint failed: %v", err)
 	}
 
-	endpoints, _ := GetAllEndpoints(db)
+	endpoints, _ := db.GetAllEndpoints()
 	if len(endpoints) != 0 {
 		t.Errorf("expected 0 endpoints after delete, got %d", len(endpoints))
 	}
 }
 
 func TestDeleteEndpointNotFoundDB(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	err := DeleteEndpoint(db, 9999)
+	err := db.DeleteEndpoint(9999)
 	if err == nil {
 		t.Fatal("expected error for non-existent ID, got nil")
 	}
 }
 
 func TestSoftDeleteKeepsRecord(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	ep, _ := CreateEndpoint(db, "https://example.com/hook")
-	DeleteEndpoint(db, ep.ID)
+	ep, _ := db.CreateEndpoint("https://example.com/hook")
+	db.DeleteEndpoint(ep.ID)
 
 	// Record should still exist in DB
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM endpoints WHERE id = ?", ep.ID).Scan(&count)
+	db.conn.QueryRow("SELECT COUNT(*) FROM endpoints WHERE id = ?", ep.ID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected soft-deleted record to still exist, got count %d", count)
 	}
 
 	// But not returned by GetAllEndpoints
-	endpoints, _ := GetAllEndpoints(db)
+	endpoints, _ := db.GetAllEndpoints()
 	if len(endpoints) != 0 {
 		t.Errorf("expected 0 active endpoints, got %d", len(endpoints))
 	}
 }
 
 func TestSoftDeleteAllowsReuse(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	ep, _ := CreateEndpoint(db, "https://example.com/hook")
-	DeleteEndpoint(db, ep.ID)
+	ep, _ := db.CreateEndpoint("https://example.com/hook")
+	db.DeleteEndpoint(ep.ID)
 
 	// Should be able to re-create with the same URL
-	ep2, err := CreateEndpoint(db, "https://example.com/hook")
+	ep2, err := db.CreateEndpoint("https://example.com/hook")
 	if err != nil {
 		t.Fatalf("expected re-create after soft delete to succeed: %v", err)
 	}
@@ -143,9 +143,9 @@ func TestSoftDeleteAllowsReuse(t *testing.T) {
 }
 
 func TestCreateWebhookRequest(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	wr, err := CreateWebhookRequest(db, `{"type":"payment"}`, "application/json", "sig123")
+	wr, err := db.CreateWebhookRequest(`{"type":"payment"}`, "application/json", "sig123")
 	if err != nil {
 		t.Fatalf("CreateWebhookRequest failed: %v", err)
 	}
@@ -167,10 +167,10 @@ func TestCreateWebhookRequest(t *testing.T) {
 }
 
 func TestGetAllWebhookRequests(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
 	// Empty initially
-	requests, err := GetAllWebhookRequests(db, 100)
+	requests, err := db.GetAllWebhookRequests(100)
 	if err != nil {
 		t.Fatalf("GetAllWebhookRequests failed: %v", err)
 	}
@@ -179,10 +179,10 @@ func TestGetAllWebhookRequests(t *testing.T) {
 	}
 
 	// Add two
-	CreateWebhookRequest(db, "body1", "text/plain", "sig1")
-	CreateWebhookRequest(db, "body2", "text/plain", "sig2")
+	db.CreateWebhookRequest("body1", "text/plain", "sig1")
+	db.CreateWebhookRequest("body2", "text/plain", "sig2")
 
-	requests, err = GetAllWebhookRequests(db, 100)
+	requests, err = db.GetAllWebhookRequests(100)
 	if err != nil {
 		t.Fatalf("GetAllWebhookRequests failed: %v", err)
 	}
@@ -197,13 +197,13 @@ func TestGetAllWebhookRequests(t *testing.T) {
 }
 
 func TestDeleteAlreadyDeletedEndpoint(t *testing.T) {
-	setupTestDB(t)
+	db := setupTestDB(t)
 
-	ep, _ := CreateEndpoint(db, "https://example.com/hook")
-	DeleteEndpoint(db, ep.ID)
+	ep, _ := db.CreateEndpoint("https://example.com/hook")
+	db.DeleteEndpoint(ep.ID)
 
 	// Deleting again should return not found
-	err := DeleteEndpoint(db, ep.ID)
+	err := db.DeleteEndpoint(ep.ID)
 	if err != ErrNotFound {
 		t.Errorf("expected ErrNotFound for already-deleted endpoint, got %v", err)
 	}

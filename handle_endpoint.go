@@ -9,7 +9,8 @@ import (
 )
 
 func handleListEndpoints(c *gin.Context) {
-	endpoints, err := GetAllEndpoints(db)
+	db := getDB(c)
+	endpoints, err := db.GetAllEndpoints()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -32,7 +33,8 @@ func handleCreateEndpoint(c *gin.Context) {
 		return
 	}
 
-	ep, err := CreateEndpoint(db, input.URL)
+	db := getDB(c)
+	ep, err := db.CreateEndpoint(input.URL)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
 			c.JSON(http.StatusConflict, gin.H{"error": "endpoint already exists"})
@@ -52,7 +54,8 @@ func handleDeleteEndpoint(c *gin.Context) {
 		return
 	}
 
-	if err := DeleteEndpoint(db, id); err != nil {
+	db := getDB(c)
+	if err := db.DeleteEndpoint(id); err != nil {
 		if err == ErrNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "endpoint not found"})
 			return

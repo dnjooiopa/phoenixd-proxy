@@ -8,6 +8,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+type DB struct {
+	conn *sql.DB
+}
+
 type Endpoint struct {
 	ID        int64      `json:"id"`
 	URL       string     `json:"url"`
@@ -25,14 +29,14 @@ type WebhookRequest struct {
 
 var ErrNotFound = errors.New("not found")
 
-func InitDB(path string) (*sql.DB, error) {
-	database, err := sql.Open("sqlite3", path)
+func NewDB(path string) (*DB, error) {
+	conn, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
-	database.SetMaxOpenConns(1)
+	conn.SetMaxOpenConns(1)
 
-	_, err = database.Exec(`
+	_, err = conn.Exec(`
 		CREATE TABLE IF NOT EXISTS endpoints (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			url        TEXT NOT NULL,
@@ -44,7 +48,7 @@ func InitDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	_, err = database.Exec(`
+	_, err = conn.Exec(`
 		CREATE TABLE IF NOT EXISTS webhook_requests (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			body         TEXT NOT NULL,
@@ -57,7 +61,7 @@ func InitDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	_, err = database.Exec(`
+	_, err = conn.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_endpoints_url_active
 		ON endpoints (url) WHERE deleted_at IS NULL
 	`)
@@ -65,11 +69,15 @@ func InitDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	return database, nil
+	return &DB{conn: conn}, nil
 }
 
-func GetAllEndpoints(database *sql.DB) ([]Endpoint, error) {
-	rows, err := database.Query("SELECT id, url, created_at FROM endpoints WHERE deleted_at IS NULL ORDER BY id")
+func (d *DB) Close() error {
+	return d.conn.Close()
+}
+
+func (d *DB) GetAllEndpoints() ([]Endpoint, error) {
+	rows, err := d.conn.Query("SELECT id, url, created_at FROM endpoints WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -91,9 +99,9 @@ func GetAllEndpoints(database *sql.DB) ([]Endpoint, error) {
 	return endpoints, rows.Err()
 }
 
-func CreateEndpoint(database *sql.DB, url string) (Endpoint, error) {
+func (d *DB) CreateEndpoint(url string) (Endpoint, error) {
 	var ep Endpoint
-	err := database.QueryRow(
+	err := d.conn.QueryRow(
 		"INSERT INTO endpoints (url) VALUES (?) RETURNING id, url, created_at",
 		url,
 	).Scan(&ep.ID, &ep.URL, &ep.CreatedAt)
@@ -103,9 +111,9 @@ func CreateEndpoint(database *sql.DB, url string) (Endpoint, error) {
 	return ep, nil
 }
 
-func CreateWebhookRequest(database *sql.DB, body, contentType, signature string) (WebhookRequest, error) {
+func (d *DB) CreateWebhookRequest(body, contentType, signature string) (WebhookRequest, error) {
 	var wr WebhookRequest
-	err := database.QueryRow(
+	err := d.conn.QueryRow(
 		"INSERT INTO webhook_requests (body, content_type, signature) VALUES (?, ?, ?) RETURNING id, body, content_type, signature, created_at",
 		body, contentType, signature,
 	).Scan(&wr.ID, &wr.Body, &wr.ContentType, &wr.Signature, &wr.CreatedAt)
@@ -115,11 +123,11 @@ func CreateWebhookRequest(database *sql.DB, body, contentType, signature string)
 	return wr, nil
 }
 
-func GetAllWebhookRequests(database *sql.DB, limit int) ([]WebhookRequest, error) {
+func (d *DB) GetAllWebhookRequests(limit int) ([]WebhookRequest, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	rows, err := database.Query("SELECT id, body, content_type, signature, created_at FROM webhook_requests ORDER BY id DESC LIMIT ?", limit)
+	rows, err := d.conn.Query("SELECT id, body, content_type, signature, created_at FROM webhook_requests ORDER BY id DESC LIMIT ?", limit)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +149,8 @@ func GetAllWebhookRequests(database *sql.DB, limit int) ([]WebhookRequest, error
 	return requests, rows.Err()
 }
 
-func DeleteEndpoint(database *sql.DB, id int64) error {
-	result, err := database.Exec(
+func (d *DB) DeleteEndpoint(id int64) error {
+	result, err := d.conn.Exec(
 		"UPDATE endpoints SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
 		id,
 	)

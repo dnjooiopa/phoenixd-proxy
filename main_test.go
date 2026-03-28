@@ -13,26 +13,25 @@ import (
 
 const testAPIKey = "test-secret-key"
 
-func setupTestRouter(t *testing.T) *gin.Engine {
+func setupTestRouter(t *testing.T) (*gin.Engine, *DB) {
 	return setupTestRouterWithPhoenixd(t, "", "")
 }
 
-func setupTestRouterWithPhoenixd(t *testing.T, phoenixdURL, phoenixdPassword string) *gin.Engine {
+func setupTestRouterWithPhoenixd(t *testing.T, phoenixdURL, phoenixdPassword string) (*gin.Engine, *DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	var err error
-	db, err = InitDB(":memory:")
+	db, err := NewDB(":memory:")
 	if err != nil {
-		t.Fatalf("InitDB failed: %v", err)
+		t.Fatalf("NewDB failed: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 
-	return setupRouter(testAPIKey, phoenixdURL, phoenixdPassword)
+	return setupRouter(db, testAPIKey, phoenixdURL, phoenixdPassword), db
 }
 
 func TestListEndpointsUnauthorized(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/endpoints", nil)
@@ -44,7 +43,7 @@ func TestListEndpointsUnauthorized(t *testing.T) {
 }
 
 func TestListEndpointsEmpty(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/endpoints", nil)
@@ -65,7 +64,7 @@ func TestListEndpointsEmpty(t *testing.T) {
 }
 
 func TestCreateAndListEndpoint(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	// Create
 	body := bytes.NewBufferString(`{"url":"https://example.com/hook"}`)
@@ -103,7 +102,7 @@ func TestCreateAndListEndpoint(t *testing.T) {
 }
 
 func TestCreateEndpointDuplicate(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	body := `{"url":"https://example.com/hook"}`
 	for i := 0; i < 2; i++ {
@@ -123,7 +122,7 @@ func TestCreateEndpointDuplicate(t *testing.T) {
 }
 
 func TestDeleteEndpoint(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	// Create first
 	body := bytes.NewBufferString(`{"url":"https://example.com/hook"}`)
@@ -145,7 +144,7 @@ func TestDeleteEndpoint(t *testing.T) {
 }
 
 func TestDeleteEndpointNotFound(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", "/endpoints/9999", nil)
@@ -158,7 +157,7 @@ func TestDeleteEndpointNotFound(t *testing.T) {
 }
 
 func TestWebhookSavesRequest(t *testing.T) {
-	r := setupTestRouter(t)
+	r, db := setupTestRouter(t)
 
 	body := bytes.NewBufferString(`{"type":"payment_received","amountSat":100}`)
 	w := httptest.NewRecorder()
@@ -172,7 +171,7 @@ func TestWebhookSavesRequest(t *testing.T) {
 	}
 
 	// Verify it was saved
-	requests, err := GetAllWebhookRequests(db, 100)
+	requests, err := db.GetAllWebhookRequests(100)
 	if err != nil {
 		t.Fatalf("GetAllWebhookRequests failed: %v", err)
 	}
@@ -191,7 +190,7 @@ func TestWebhookSavesRequest(t *testing.T) {
 }
 
 func TestListWebhookRequestsUnauthorized(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/webhook-requests", nil)
@@ -203,7 +202,7 @@ func TestListWebhookRequestsUnauthorized(t *testing.T) {
 }
 
 func TestListWebhookRequestsEmpty(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/webhook-requests", nil)
@@ -224,7 +223,7 @@ func TestListWebhookRequestsEmpty(t *testing.T) {
 }
 
 func TestWebhookNoAuth(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	// Webhook should work without API key
 	body := bytes.NewBufferString(`{"type":"payment_received","amountSat":1}`)
@@ -250,7 +249,7 @@ func TestWebhookNoAuth(t *testing.T) {
 }
 
 func TestPhoenixdProxyUnauthorized(t *testing.T) {
-	r := setupTestRouter(t)
+	r, _ := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/phoenixd/proxy/createinvoice", strings.NewReader("description=test"))
@@ -290,7 +289,7 @@ func TestPhoenixdProxyPostCreateInvoice(t *testing.T) {
 	}))
 	defer phoenixd.Close()
 
-	r := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-phoenixd-pass")
+	r, _ := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-phoenixd-pass")
 
 	w := httptest.NewRecorder()
 	body := "description=my+first+invoice&amountSat=100&externalId=foobar"
@@ -328,7 +327,7 @@ func TestPhoenixdProxyGetNodeInfo(t *testing.T) {
 	}))
 	defer phoenixd.Close()
 
-	r := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-pass")
+	r, _ := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-pass")
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/phoenixd/proxy/getinfo", nil)
@@ -354,7 +353,7 @@ func TestPhoenixdProxyPhoenixdError(t *testing.T) {
 	}))
 	defer phoenixd.Close()
 
-	r := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-phoenixd-pass")
+	r, _ := setupTestRouterWithPhoenixd(t, phoenixd.URL, "test-phoenixd-pass")
 
 	w := httptest.NewRecorder()
 	body := "description=test&amountSat=-1"
